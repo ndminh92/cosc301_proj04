@@ -18,7 +18,7 @@
 
 void ta_libinit(void) {
     blocked_thread = 0;
-    getcontext(main_thread);
+    getcontext(&main_thread);
     first_thread = NULL;
     last_thread = NULL;
     return;
@@ -27,14 +27,14 @@ void ta_libinit(void) {
 // Create new thread, based on context of current thread. 
 // Push new thread to end of queue
 void ta_create(void (*func)(void *), void *arg) {
-    ucontext_t *newuc = malloc(sizeof(ucontext_t *));
+    ucontext_t *newuc = malloc(sizeof(ucontext_t));
     unsigned char *newstack = (unsigned char *)malloc(STACKSIZE);
     getcontext(newuc);
 
     // Initialize context
     newuc -> uc_stack.ss_sp = newstack;
     newuc -> uc_stack.ss_size = STACKSIZE;
-    newuc -> uc_link = NULL;
+    newuc -> uc_link = NULL;    // Since this go to end of queue, nothing follows
     if (first_thread == NULL) { // Queue is empty
         first_thread = newuc;
         last_thread = newuc;
@@ -46,32 +46,20 @@ void ta_create(void (*func)(void *), void *arg) {
 }
 
 void ta_yield(void) {
-    ucontext_t *temp;
-    getcontext(temp);
-    
-    // If no thread in queue, then does nothing    
-    if (temp -> uc_link == NULL) {
-       return;
-    } else {
-       last_thread -> uc_link = temp;
-       ucontext_t *next_run  = temp -> uc_link;
-       temp -> uc_link = NULL;
-       swapcontext(temp, next_run);
-    }
-    return;
+
 }
 
 int ta_waitall(void) {
     if (first_thread == NULL) {
-    } else {
-        ucontext_t *temp;
-        getcontext(temp);
-        swapcontext(temp, first_thread);    
+		// No thread in queue
+	} 
+	else {
+        setcontext(first_thread);    
     }
 
-    if (blocked_thread == 0) {
+    if (blocked_thread == 0) { // No blocked thread
         return 1;
-    } else {
+    } else {		// Some blocked threads
         return -1;                    
     }
 }

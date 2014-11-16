@@ -26,7 +26,7 @@ typedef struct {
 // Global static variable
 //-------------------------
 static int blocked_thread;
-static ucontext_t *main_thread;
+static ucontext_t main_thread;
 static ucontext_t *first_thread;
 static ucontext_t *last_thread;
 #define STACKSIZE 8192
