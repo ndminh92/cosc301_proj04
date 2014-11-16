@@ -4,6 +4,7 @@
 
 #ifndef __THREADSALIVE_H__
 #define __THREADSALIVE_H__
+#include <ucontext.h>
 
 /* ***************************
         type definitions
@@ -21,6 +22,16 @@ typedef struct {
 
 } tacond_t;
 
+//-----------------------
+// Global static variable
+//-------------------------
+static int blocked_thread;
+static ucontext_t *main_thread;
+static ucontext_t *first_thread;
+static ucontext_t *last_thread;
+#define STACKSIZE 8192
+//------------------------
+ 
 
 /* ***************************
        stage 1 functions
