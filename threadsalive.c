@@ -8,9 +8,41 @@
 #include <assert.h>
 #include <strings.h>
 #include <string.h>
-#include <ucontext.h>
 
 #include "threadsalive.h"
+
+
+/* ********************** *
+ * Global static variable *
+ * ********************** */
+static int blocked_thread;
+static ucontext_t main_thread;
+static ucontext_t *first_thread;
+static ucontext_t *last_thread;
+
+static context_list_t clist_curr;
+#define STACKSIZE 8192
+/* ********************** */
+
+
+static void context_add(ucontext_t ctxt) {
+    context_list_t node = malloc(sizeof(context_list_t));
+    node -> context = ctx;
+    node -> blocked = 0;
+    node -> next = NULL;
+
+    if (clist == NULL) {
+        clist = node;
+    }
+    else {
+        curr = clist;
+        while (curr -> next) {
+            curr = curr -> next;
+        }
+        curr->next = node;
+    }
+}
+
 
 /* ***************************** 
      stage 1 library functions
@@ -45,15 +77,31 @@ void ta_create(void (*func)(void *), void *arg) {
     return;
 }
 
+/* 
+ * frees finished context before giving up control
+ * then push the current context to the end
+ * */
 void ta_yield(void) {
+    ucontext_t temp;
+    while (first_thread -> uc_link != /* current_thread -> uc_link */) {
+        temp = first_thread;
+        first_thread = first_thread -> uc_link;
+        free(temp -> uc_stack.ss_sp);
+        free(temp);
+    }
 
+    temp = first_thread;
+    first_thread = first_thread -> uc_link;
+    temp -> uc_link = NULL;
+    last_thread -> uc_link = temp;
+    last_thread = temp;
 }
 
 int ta_waitall(void) {
     if (first_thread == NULL) {
-		// No thread in queue
-	} 
-	else {
+        // return 0;
+    } 
+    else {
         setcontext(first_thread);    
     }
 

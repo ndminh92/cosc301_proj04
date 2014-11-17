@@ -10,6 +10,14 @@
         type definitions
    *************************** */
 
+typedef struct context_list *context_list_t;
+
+struct context_list {
+    ucontext_t context;
+    int blocked;
+    context_list_t next;
+};
+
 typedef struct {
     int value;
     ucontext_t *head;
@@ -23,15 +31,6 @@ typedef struct {
 
 } tacond_t;
 
-//-----------------------
-// Global static variable
-//-------------------------
-static int blocked_thread;
-static ucontext_t main_thread;
-static ucontext_t *first_thread;
-static ucontext_t *last_thread;
-#define STACKSIZE 8192
-//------------------------
  
 
 /* ***************************
