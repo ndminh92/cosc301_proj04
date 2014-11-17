@@ -20,48 +20,76 @@
 static int blocked_thread;
 static ucontext_t main_thread;
 static ucontext_t *current_thread;
-static ucontext_t *last_thread;
+//static ucontext_t *last_thread;
 
 static t_list_t *head;
 static t_list_t *tail;
-static t_list_t context_list;
-static t_list_t context_curr;
+//static t_list_t context_list;
+//static t_list_t context_curr;
 #define STACKSIZE 16384
 /* ********************** */
 
-/*
-static void context_add(ucontext_t ctxt) {
-    t_list_t *node = malloc(sizeof(t_list_t));
-    node -> context = ctxt;
-    node -> blocked = 0;
+/* init a context */
+static void context_init(t_list_t *newuc, unsigned char *newstack) {
+    // Initialize context
+    getcontext(&newuc-> context);
+    newuc -> context.uc_stack.ss_sp = newstack;
+    newuc -> context.uc_stack.ss_size = STACKSIZE;
+    newuc -> context.uc_link = &main_thread;    // Go back to main thread. Always
+}
 
-    if (context_list == NULL) {
-        context_list = node;
-        node -> prev = node;
-        node -> next = node;
+/* insert a context to a queue */
+static void t_list_insert(t_list_t *context, t_list_t **q_head) {
+    if (*q_head == NULL) { // Queue is empty
+        *q_head = context;
+    } else {
+        t_list_tail(*q_head) -> next = context;
+    }        
+}
+
+/* add a context to the main queue */
+static void t_list_main_insert(t_list_t *context) {
+    t_list_insert(context, &head);
+}
+
+/* extract a context */
+static t_list_t *t_list_extract(t_list_t *context, t_list_t **q_head) {
+    if (!t_list_contains(context, *q_head)) { // Queue is empty
+        return NULL;
+    } else if (*q_head == context) {
+        *q_head = (*q_head) -> next;
+    } else {
+        t_list_t *temp = *q_head;
+        while (temp -> next != context) {
+            temp = temp -> next;
+        }
+        temp -> next = temp -> next -> next;
     }
-    else {
-        node -> prev = context_list -> prev;
-        context_list -> prev -> next = node;
-        node -> next = context_list;
-        context_list -> prev = node;
+    return context;
+}
+
+/* returns the last node on the queue */
+static t_list_t* t_list_tail(t_list_t *q_head) {
+    if (q_head == NULL) {
+        return NULL;
+    } else {
+        while (q_head -> next != NULL) {
+            q_head = q_head -> next;
+        }
+        return q_head;
     }
 }
-*/
-// Compare two context. If their stack pointer are equal, they are equal
-static int eq_context(ucontext_t *uc1, ucontext_t *uc2) {
-#ifdef __DEBUG__
-    //printf("context %p has stack %p\n", uc1, (uc1->uc_stack.ss_sp));
-    //printf("context %p has stack %p\n", uc2, (uc2->uc_stack.ss_sp));
-    printf("context %p has link %p\n", uc1, (uc1->uc_link));
-    printf("context %p has link %p\n", uc2, (uc2->uc_link));
-    fflush(stdout);
-#endif
-    if ((uc1 -> uc_link) == (uc2 -> uc_link)) {
-        return 1;
+
+/* insert a context to a queue */
+static bool t_list_contains(t_list_t *context, t_list_t *q_head) {
+    if (q_head == NULL) { // Queue is empty
+        return false;
     } else {
-        return 0;   
-    }
+        while (q_head -> next != NULL && q_head -> next != context) {
+            q_head = q_head -> next;
+        }
+        return context == q_head -> next;
+    }        
 }
 
 static void dbg_print_links() {
@@ -79,8 +107,8 @@ static void dbg_print_links() {
 
 void ta_libinit(void) {
     blocked_thread = 0;
-    current_thread = NULL;
-    last_thread = NULL;
+    //current_thread = NULL;
+    //last_thread = NULL;
     head = NULL;
     tail = NULL;
     return;
@@ -93,18 +121,10 @@ void ta_create(void (*func)(void *), void *arg) {
     unsigned char *newstack = (unsigned char *)malloc(STACKSIZE);
     newuc -> held_lock = NULL; // For stage 3 functionality.
 
-    // Initialize context
-    getcontext(&newuc->context);
-    newuc -> context.uc_stack.ss_sp = newstack;
-    newuc -> context.uc_stack.ss_size = STACKSIZE;
-    newuc -> context.uc_link = &main_thread;    // Go back to main thread. Always
+    context_init(newuc, newstack);
     makecontext(&newuc -> context, (void (*)(void))func, 1, arg);
-    if (head == NULL) { // Queue is empty
-        head = newuc;
-    } else {
-        tail -> next = newuc;
-    }        
-    tail = newuc;
+    
+    t_list_main_insert(newuc);
     printf("Finished adding a thread context\n");
     return;
 }
@@ -114,16 +134,15 @@ void ta_create(void (*func)(void *), void *arg) {
  * then push the current context to the end
  * */
 void ta_yield(void) {
-    if (head == tail) { // Only one thread in queue, nothing to yield to
+    if (head == t_list_tail(head)) { // Only one thread in queue, nothing to yield to
         return;
     } else { // Move thread to end of queue
         ucontext_t *thisuc = &head -> context;
         t_list_t *temp = head -> next;
         
         // Move head to end
-        tail -> next = head;
+        t_list_tail(head) -> next = head;
         head -> next = NULL;
-        tail = head;
 
         head = temp;
         ucontext_t *nextuc = &temp -> context;
@@ -158,18 +177,22 @@ int ta_waitall(void) {
 
 // Extra function
 
+
 /* ***************************** 
      stage 2 library functions
    ***************************** */
 
 void ta_sem_init(tasem_t *sem, int value) {
     sem -> value = value;
+    sem -> head = NULL;
 }
 
 void ta_sem_destroy(tasem_t *sem) {
+    /* Hello. My name is Inigo Montoya. You killed my father. Prepare to die. */
 }
 
 void ta_sem_post(tasem_t *sem) {
+    (sem -> value)++;
 }
 
 void ta_sem_wait(tasem_t *sem) {
@@ -198,7 +221,7 @@ void ta_unlock(talock_t *mutex) {
 
 void ta_cond_init(tacond_t *cond) {
     cond -> head = NULL;
-    cond -> tail = NULL;
+    //cond -> tail = NULL;
 }
 
 void ta_cond_destroy(tacond_t *cond) {
@@ -210,7 +233,7 @@ void ta_cond_destroy(tacond_t *cond) {
         free(cond -> head);
         cond -> head = temp;
     }
-    cond -> tail = NULL;
+    //cond -> tail = NULL;
 }
 
 void ta_wait(talock_t *mutex, tacond_t *cond) {
@@ -221,17 +244,19 @@ void ta_wait(talock_t *mutex, tacond_t *cond) {
     thisuc -> held_lock = mutex;
 
     // Move this ucontext into a waiting queue
-    if (head == tail) { // No other thread in ready queue
+    if (head == t_list_tail(head)) { // No other thread in ready queue
         head = NULL; // Remove context from ready queue
-        tail = NULL; // which happens to have nothing left in it.
-        ta_cond_add(cond, thisuc);
-        swapcontext(thisuc -> context, &mainthread); // swap back to main
+        //tail = NULL; // which happens to have nothing left in it.
+//        ta_cond_add(cond, thisuc);
+        t_list_insert(thisuc, &cond->head);
+        swapcontext(&thisuc -> context, &main_thread); // swap back to main
         
     } else { // Move thread to end of queue
         head = thisuc -> next;
         
-        ta_cond_add(cond, thisuc); // Add thread to waiting queue
-        swapcontext(thisuc -> context, head -> context); // Swap to next context
+        //ta_cond_add(cond, thisuc); // Add thread to waiting queue
+        t_list_insert(thisuc, &cond->head);
+        swapcontext(&thisuc -> context, &head -> context); // Swap to next context
     }
 
     
@@ -239,14 +264,14 @@ void ta_wait(talock_t *mutex, tacond_t *cond) {
 
 void ta_signal(tacond_t *cond) {
     // Get a thead from cond waiting queue to put back on ready queue
-    t_list_t *temp = ta_cond_remove(cond);
+    t_list_t *temp = t_list_extract(cond -> head, &cond -> head);
     if (temp == NULL) { // Nothing waiting
         return;
     } else {
         talock_t *lock = temp -> held_lock; // Remember to acquire lock again
         temp -> held_lock = NULL;
 
-        // WAITING FOR LOCK FUNCTIONALITY
+       t_list_insert(temp, &(lock -> sem.head));     
         // Add temp to the waiting queue for *lock
     }
 }
