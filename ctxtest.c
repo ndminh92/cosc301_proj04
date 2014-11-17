@@ -26,11 +26,14 @@ static void mythread(int threadid, int x)
     /* do a context switch from thread 1 to thread 2 (or from 2 to
      * 1)  */
     int otherthread = (threadid == 1) ? 2 : 1;
-    swapcontext(&ctx[threadid], &ctx[otherthread]);
+    //swapcontext(&ctx[threadid], &ctx[otherthread]);
 
     shared_variable += 1;
     printf("back in thread %d; shared_variable is %d\n",
            threadid, shared_variable);
+    if (threadid == 1) {
+        swapcontext(&ctx[threadid],&ctx[otherthread]);
+    }
 }
 
 

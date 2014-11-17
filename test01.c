@@ -3,12 +3,14 @@
 
 void thread1(void *arg)
 {
+    fprintf(stdout,"Entering thread function\n");
     int *i = (int *)arg;
     *i += 7;
     fprintf(stderr, "begin t1: %d\n", *i);
    // ta_yield();
     *i += 7;
     fprintf(stderr, "end t1: %d\n", *i);
+    fprintf(stdout, "Leaving thread function\n");
 }
 
 void thread2(void *arg)
@@ -16,7 +18,7 @@ void thread2(void *arg)
     int *i = (int *)arg;
     *i -= 7;
     fprintf(stderr, "begin t2: %d\n", *i);
-    ta_yield();
+    //ta_yield();
     *i -= 7;
     fprintf(stderr, "end t2: %d\n", *i);
 }

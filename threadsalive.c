@@ -87,7 +87,7 @@ void ta_create(void (*func)(void *), void *arg) {
         last_thread -> uc_link = newuc;
     }        
     last_thread = newuc;
-
+    fprintf(stdout, "Finished adding a thread context\n");
     return;
 }
 
