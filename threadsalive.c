@@ -17,17 +17,17 @@
  * ********************** */
 static int blocked_thread;
 static ucontext_t main_thread;
-static ucontext_t *first_thread;
+static ucontext_t *current_thread;
 static ucontext_t *last_thread;
 
-static context_list_t clist_curr;
-#define STACKSIZE 8192
+static context_list_t clist;
+#define STACKSIZE 16384
 /* ********************** */
 
-
+/*
 static void context_add(ucontext_t ctxt) {
     context_list_t node = malloc(sizeof(context_list_t));
-    node -> context = ctx;
+    node -> context = ctxt;
     node -> blocked = 0;
     node -> next = NULL;
 
@@ -35,14 +35,22 @@ static void context_add(ucontext_t ctxt) {
         clist = node;
     }
     else {
-        curr = clist;
+        node = clist;
         while (curr -> next) {
             curr = curr -> next;
         }
         curr->next = node;
     }
 }
-
+*/
+// Compare two context. If their stack pointer are equal, they are equal
+static int eq_context(ucontext_t *uc1, ucontext_t *uc2) {
+    if (uc1 -> uc_link == uc2 -> uc_link) {
+        return 1;
+    } else {
+        return 0;   
+    }
+}
 
 /* ***************************** 
      stage 1 library functions
@@ -50,8 +58,11 @@ static void context_add(ucontext_t ctxt) {
 
 void ta_libinit(void) {
     blocked_thread = 0;
-    getcontext(&main_thread);
-    first_thread = NULL;
+    //unsigned char *main_stack = (unsigned char *)malloc(STACKSIZE);
+    //main_thread.uc_stack.ss_sp = main_stack;
+    //main_thread.uc_stack.ss_size = STACKSIZE;
+    //getcontext(&main_thread);
+    current_thread = NULL;
     last_thread = NULL;
     return;
 }
@@ -61,19 +72,21 @@ void ta_libinit(void) {
 void ta_create(void (*func)(void *), void *arg) {
     ucontext_t *newuc = malloc(sizeof(ucontext_t));
     unsigned char *newstack = (unsigned char *)malloc(STACKSIZE);
-    getcontext(newuc);
+    
 
     // Initialize context
+    getcontext(newuc);
     newuc -> uc_stack.ss_sp = newstack;
     newuc -> uc_stack.ss_size = STACKSIZE;
-    newuc -> uc_link = NULL;    // Since this go to end of queue, nothing follows
-    if (first_thread == NULL) { // Queue is empty
-        first_thread = newuc;
-        last_thread = newuc;
+    newuc -> uc_link = &main_thread;    // Go back to main thread
+    makecontext(newuc, (void (*)(void))func, 1, arg);
+    if (current_thread == NULL) { // Queue is empty
+        current_thread = newuc;
     } else {
         last_thread -> uc_link = newuc;
     }        
-    makecontext(newuc, func, 1, arg);
+    last_thread = newuc;
+
     return;
 }
 
@@ -82,45 +95,41 @@ void ta_create(void (*func)(void *), void *arg) {
  * then push the current context to the end
  * */
 void ta_yield(void) {
-    ucontext_t temp;
-    while (first_thread -> uc_link != /* current_thread -> uc_link */) {
-        temp = first_thread;
-        first_thread = first_thread -> uc_link;
+    ucontext_t curr;
+    getcontext(&curr);
+    ucontext_t *temp;
+    temp = current_thread;
+    while (!eq_context(&curr, temp)) {
+        current_thread = current_thread -> uc_link;
         free(temp -> uc_stack.ss_sp);
         free(temp);
+        temp = current_thread;
     }
 
-    temp = first_thread;
-    first_thread = first_thread -> uc_link;
-    temp -> uc_link = NULL;
+    current_thread = current_thread -> uc_link;
+
     last_thread -> uc_link = temp;
     last_thread = temp;
+    temp -> uc_link = &main_thread;
+    swapcontext(last_thread, current_thread);
 }
 
 int ta_waitall(void) {
-    if (first_thread == NULL) {
-        // return 0;
+    if (current_thread == NULL) {
+        // empty queue, nothing to run
     } 
     else {
-        setcontext(first_thread);    
+        swapcontext(&main_thread,current_thread);    
     }
 
     if (blocked_thread == 0) { // No blocked thread
-        return 1;
+        return 0;
     } else {		// Some blocked threads
         return -1;                    
     }
 }
 
 // Extra function
-
-// Compare two context. If their stack pointer are equal, they are equal
-static int eq_context(ucontext_t *uc1, ucontext_t *uc2) {
-    if (uc1 -> uc_link == uc2 -> uc_link) {
-        return 1;
-    } else {
-        return 0;   
-}
 
 /* ***************************** 
      stage 2 library functions
@@ -144,15 +153,15 @@ void ta_lock_init(talock_t *mutex) {
 }
 
 void ta_lock_destroy(talock_t *mutex) {
-    ta_sem_destroy(mutex -> sem);
+    ta_sem_destroy(&mutex -> sem);
 }
 
 void ta_lock(talock_t *mutex) {
-    ta_sem_wait(mutex -> sem);
+    ta_sem_wait(&mutex -> sem);
 }
 
 void ta_unlock(talock_t *mutex) {
-    ta_sem_post(mutex -> sem);
+    ta_sem_post(&mutex -> sem);
 }
 
 
