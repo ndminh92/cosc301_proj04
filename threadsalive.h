@@ -10,12 +10,13 @@
         type definitions
    *************************** */
 
-typedef struct context_list *context_list_t;
+typedef struct t_list t_list_t;
 
-struct context_list {
-    ucontext_t context;
+struct t_list {
+    ucontext_t *context;
     int blocked;
-    context_list_t next;
+    t_list_t *prev;
+    t_list_t *next;
 };
 
 typedef struct {

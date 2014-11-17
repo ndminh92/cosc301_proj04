@@ -20,26 +20,27 @@ static ucontext_t main_thread;
 static ucontext_t *current_thread;
 static ucontext_t *last_thread;
 
-static context_list_t clist;
+static t_list_t context_list;
+static t_list_t context_curr;
 #define STACKSIZE 16384
 /* ********************** */
 
 /*
 static void context_add(ucontext_t ctxt) {
-    context_list_t node = malloc(sizeof(context_list_t));
+    t_list_t *node = malloc(sizeof(t_list_t));
     node -> context = ctxt;
     node -> blocked = 0;
-    node -> next = NULL;
 
-    if (clist == NULL) {
-        clist = node;
+    if (context_list == NULL) {
+        context_list = node;
+        node -> prev = node;
+        node -> next = node;
     }
     else {
-        node = clist;
-        while (curr -> next) {
-            curr = curr -> next;
-        }
-        curr->next = node;
+        node -> prev = context_list -> prev;
+        context_list -> prev -> next = node;
+        node -> next = context_list;
+        context_list -> prev = node;
     }
 }
 */
