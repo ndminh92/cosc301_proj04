@@ -13,7 +13,7 @@
 typedef struct t_list t_list_t;
 
 struct t_list {
-    ucontext_t *context;
+    ucontext_t context;
     int blocked;
     t_list_t *prev;
     t_list_t *next;

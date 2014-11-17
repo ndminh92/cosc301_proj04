@@ -22,6 +22,8 @@ static ucontext_t main_thread;
 static ucontext_t *current_thread;
 static ucontext_t *last_thread;
 
+static t_list_t *head;
+static t_list_t *tail;
 static t_list_t context_list;
 static t_list_t context_curr;
 #define STACKSIZE 16384
@@ -79,29 +81,31 @@ void ta_libinit(void) {
     blocked_thread = 0;
     current_thread = NULL;
     last_thread = NULL;
+    head = NULL;
+    tail = NULL;
     return;
 }
 
 // Create new thread, based on context of current thread. 
 // Push new thread to end of queue
 void ta_create(void (*func)(void *), void *arg) {
-    ucontext_t *newuc = malloc(sizeof(ucontext_t));
+    t_list_t *newuc = malloc(sizeof(t_list_t));
     unsigned char *newstack = (unsigned char *)malloc(STACKSIZE);
     
 
     // Initialize context
-    getcontext(newuc);
-    newuc -> uc_stack.ss_sp = newstack;
-    newuc -> uc_stack.ss_size = STACKSIZE;
-    newuc -> uc_link = &main_thread;    // Go back to main thread
-    makecontext(newuc, (void (*)(void))func, 1, arg);
-    if (current_thread == NULL) { // Queue is empty
-        current_thread = newuc;
+    getcontext(&newuc->context);
+    newuc -> context.uc_stack.ss_sp = newstack;
+    newuc -> context.uc_stack.ss_size = STACKSIZE;
+    newuc -> context.uc_link = &main_thread;    // Go back to main thread. Always
+    makecontext(&newuc -> context, (void (*)(void))func, 1, arg);
+    if (head == NULL) { // Queue is empty
+        head = newuc;
     } else {
-        last_thread -> uc_link = newuc;
+        tail -> next = newuc;
     }        
-    last_thread = newuc;
-    fprintf(stdout, "Finished adding a thread context\n");
+    tail = newuc;
+    printf("Finished adding a thread context\n");
     return;
 }
 
@@ -110,54 +114,39 @@ void ta_create(void (*func)(void *), void *arg) {
  * then push the current context to the end
  * */
 void ta_yield(void) {
-    ucontext_t curr;
-    getcontext(&curr);
-#ifdef __DEBUG__
-    if (curr.uc_stack.ss_sp == NULL) {
-        printf("Houston, we have a null pointer problem.\n");
-    }
-#endif
-    ucontext_t *temp;
-    temp = current_thread;
-    while (!eq_context(&curr, temp)) {
-        current_thread = current_thread -> uc_link;
-        free(temp -> uc_stack.ss_sp);
-        free(temp);
-        temp = current_thread;
-    }
+    if (head == tail) { // Only one thread in queue, nothing to yield to
+        return;
+    } else { // Move thread to end of queue
+        ucontext_t *thisuc = &head -> context;
+        t_list_t *temp = head -> next;
+        
+        // Move head to end
+        tail -> next = head;
+        head -> next = NULL;
+        tail = head;
 
-    current_thread = current_thread -> uc_link;
-
-    last_thread -> uc_link = temp;
-    last_thread = temp;
-    last_thread -> uc_link = &main_thread;
-#ifdef __DEBUG__
-    dbg_print_links();
-#endif
-    if (swapcontext(last_thread, current_thread) != 0) {
-        printf("error 0x05318008: yield failure\n");
+        head = temp;
+        ucontext_t *nextuc = &temp -> context;
+        swapcontext(thisuc, nextuc);
     }
 }
 
 int ta_waitall(void) {
-    //if (current_thread == NULL) {
-        // empty queue, nothing to run
-    //} 
-    //else {
-#ifdef __DEBUG__
-    dbg_print_links();
-#endif
-    if (swapcontext(&main_thread, current_thread) != 0) {
-        printf("error 0xDEADBEEF: waitall failure\n");
-    }
-    //}
-    
-    while (current_thread != &main_thread) {
-        ucontext_t *temp = current_thread;
-        current_thread = current_thread -> uc_link;
-        free(temp -> uc_stack.ss_sp);
+    while (head != NULL) {
+        swapcontext(&main_thread, &head -> context);
+        // Return here only if context finishes
+        t_list_t *temp = head;
+        if (head == tail) { // Last thread in queue
+            head = NULL;
+            tail = NULL;
+        } else {
+           head = head -> next;
+        }
+        
+        // Free stuff
         free(temp);
     }
+    
 
     if (blocked_thread == 0) { // No blocked thread
         return 0;
