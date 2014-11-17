@@ -29,39 +29,63 @@ static t_list_t context_curr;
 #define STACKSIZE 16384
 /* ********************** */
 
-/*
-static void context_add(ucontext_t ctxt) {
-    t_list_t *node = malloc(sizeof(t_list_t));
-    node -> context = ctxt;
-    node -> blocked = 0;
-
-    if (context_list == NULL) {
-        context_list = node;
-        node -> prev = node;
-        node -> next = node;
-    }
-    else {
-        node -> prev = context_list -> prev;
-        context_list -> prev -> next = node;
-        node -> next = context_list;
-        context_list -> prev = node;
-    }
+/* init a context */
+static void context_init(t_list_t *newuc) {
+    // Initialize context
+    getcontext(&newuc->context);
+    newuc -> context.uc_stack.ss_sp = newstack;
+    newuc -> context.uc_stack.ss_size = STACKSIZE;
+    newuc -> context.uc_link = &main_thread;    // Go back to main thread. Always
 }
-*/
-// Compare two context. If their stack pointer are equal, they are equal
-static int eq_context(ucontext_t *uc1, ucontext_t *uc2) {
-#ifdef __DEBUG__
-    //printf("context %p has stack %p\n", uc1, (uc1->uc_stack.ss_sp));
-    //printf("context %p has stack %p\n", uc2, (uc2->uc_stack.ss_sp));
-    printf("context %p has link %p\n", uc1, (uc1->uc_link));
-    printf("context %p has link %p\n", uc2, (uc2->uc_link));
-    fflush(stdout);
-#endif
-    if ((uc1 -> uc_link) == (uc2 -> uc_link)) {
-        return 1;
+
+/* insert a context to a queue */
+static void t_list_insert(t_list_t *context, t_list_t **q_head) {
+    if (*q_head == NULL) { // Queue is empty
+        *q_head = context;
     } else {
-        return 0;   
+        t_list_tail(*q_head) -> next = context;
+    }        
+}
+
+/* add a context to the main queue */
+static void t_list_add(t_list_t *context) {
+    context_insert(context, &head);
+}
+
+/* extract a context and shove it into another list */
+static void t_list_extract(t_list_t *context, t_list_t **q_head) {
+    if (!t_list_contains(context, *q_head)) { // Queue is empty
+        return NULL;
+    } else if (*q_head == context) {
+        *q_head = *q_head -> next;
+    } else {
+        t_list_t *temp = *q_head;
+        while (temp -> next != context) {
+            temp = temp -> next;
+        }
+        temp -> next = temp -> next -> next;
     }
+    return context;
+}
+
+/* returns the last node on the queue */
+static t_list_t* t_list_tail(t_list_t *q_head) {
+    while (q_head -> next != NULL) {
+        q_head = q_head -> next;
+    }
+    return q_head;
+}
+
+/* insert a context to a queue */
+static bool t_list_contains(t_list_t *context, t_list_t *q_head) {
+    if (q_head == NULL) { // Queue is empty
+        return false;
+    } else {
+        while (q_head -> next != NULL && q_head -> next != context) {
+            q_head = q_head -> next;
+        }
+        return context == q_head -> next;
+    }        
 }
 
 static void dbg_print_links() {
@@ -91,20 +115,11 @@ void ta_libinit(void) {
 void ta_create(void (*func)(void *), void *arg) {
     t_list_t *newuc = malloc(sizeof(t_list_t));
     unsigned char *newstack = (unsigned char *)malloc(STACKSIZE);
-    
 
-    // Initialize context
-    getcontext(&newuc->context);
-    newuc -> context.uc_stack.ss_sp = newstack;
-    newuc -> context.uc_stack.ss_size = STACKSIZE;
-    newuc -> context.uc_link = &main_thread;    // Go back to main thread. Always
+    context_init(newuc);
     makecontext(&newuc -> context, (void (*)(void))func, 1, arg);
-    if (head == NULL) { // Queue is empty
-        head = newuc;
-    } else {
-        tail -> next = newuc;
-    }        
-    tail = newuc;
+    
+    context_add(newuc);
     printf("Finished adding a thread context\n");
     return;
 }
@@ -158,18 +173,22 @@ int ta_waitall(void) {
 
 // Extra function
 
+
 /* ***************************** 
      stage 2 library functions
    ***************************** */
 
 void ta_sem_init(tasem_t *sem, int value) {
     sem -> value = value;
+    sem -> head = NULL;
 }
 
 void ta_sem_destroy(tasem_t *sem) {
+    /* Hello. My name is Inigo Montoya. You killed my father. Prepare to die. */
 }
 
 void ta_sem_post(tasem_t *sem) {
+    (sem -> value)++;
 }
 
 void ta_sem_wait(tasem_t *sem) {

@@ -6,6 +6,7 @@
 #define __THREADSALIVE_H__
 #include <ucontext.h>
 #include <signal.h>
+#include <stdbool.h>
 /* ***************************
         type definitions
    *************************** */
@@ -21,7 +22,7 @@ struct t_list {
 
 typedef struct {
     int value;
-    ucontext_t *head;
+    t_text_t *head;
 } tasem_t;
 
 typedef struct {
@@ -33,6 +34,16 @@ typedef struct {
 } tacond_t;
 
  
+/* ***************************
+       helper functions
+   *************************** */
+
+static void context_init(t_list_t *);
+static void t_list_insert(t_list_t *, t_list_t **);
+static void t_list_add(t_list_t *);
+static void t_list_extract(t_list_t *, t_list_t **);
+static t_list_t* t_list_tail(t_list_t *);
+static bool t_list_contains(t_list_t *, t_list_t *);
 
 /* ***************************
        stage 1 functions
