@@ -5,7 +5,7 @@
 #ifndef __THREADSALIVE_H__
 #define __THREADSALIVE_H__
 #include <ucontext.h>
-
+#include <signal.h>
 /* ***************************
         type definitions
    *************************** */
