@@ -1,4 +1,10 @@
 /*
+ * Both of us did pair programming for most of this project, espeially debugging.
+ * The intitial code is distributed as following
+ * Helper functions: Sak
+ * Stage 1: Me
+ * Stage 2: Sak
+ * Stage 3: Me
  * 
  */
 
@@ -247,14 +253,12 @@ void ta_wait(talock_t *mutex, tacond_t *cond) {
     if (head == t_list_tail(head)) { // No other thread in ready queue
         head = NULL; // Remove context from ready queue
         //tail = NULL; // which happens to have nothing left in it.
-//        ta_cond_add(cond, thisuc);
         t_list_insert(thisuc, &cond->head);
         swapcontext(&thisuc -> context, &main_thread); // swap back to main
         
     } else { // Move thread to end of queue
         head = thisuc -> next;
         
-        //ta_cond_add(cond, thisuc); // Add thread to waiting queue
         t_list_insert(thisuc, &cond->head);
         swapcontext(&thisuc -> context, &head -> context); // Swap to next context
     }
@@ -271,7 +275,7 @@ void ta_signal(tacond_t *cond) {
         talock_t *lock = temp -> held_lock; // Remember to acquire lock again
         temp -> held_lock = NULL;
 
-       t_list_insert(temp, &(lock -> sem.head));     
+        t_list_insert(temp, &(lock -> sem.head));     
         // Add temp to the waiting queue for *lock
     }
 }
