@@ -77,10 +77,6 @@ static void dbg_print_links() {
 
 void ta_libinit(void) {
     blocked_thread = 0;
-    //unsigned char *main_stack = (unsigned char *)malloc(STACKSIZE);
-    //main_thread.uc_stack.ss_sp = main_stack;
-    //main_thread.uc_stack.ss_size = STACKSIZE;
-    //getcontext(&main_thread);
     current_thread = NULL;
     last_thread = NULL;
     return;
