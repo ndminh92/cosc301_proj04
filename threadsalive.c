@@ -143,8 +143,9 @@ int ta_waitall(void) {
            head = head -> next;
         }
         
-        // Free stuff
-        free(temp);
+        // Free allocated memory for the node
+        free(temp -> context.uc_stack.ss_sp); // Free stack
+        free(temp); // Free node itself
     }
     
 
