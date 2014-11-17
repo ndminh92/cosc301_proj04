@@ -64,12 +64,22 @@ int ta_waitall(void) {
     }
 }
 
+// Extra function
+
+// Compare two context. If their stack pointer are equal, they are equal
+static int eq_context(ucontext_t *uc1, ucontext_t *uc2) {
+    if (uc1 -> uc_link == uc2 -> uc_link) {
+        return 1;
+    } else {
+        return 0;   
+}
 
 /* ***************************** 
      stage 2 library functions
    ***************************** */
 
 void ta_sem_init(tasem_t *sem, int value) {
+    sem -> value = value;
 }
 
 void ta_sem_destroy(tasem_t *sem) {
@@ -82,15 +92,19 @@ void ta_sem_wait(tasem_t *sem) {
 }
 
 void ta_lock_init(talock_t *mutex) {
+    ta_sem_init(&mutex -> sem, 1);
 }
 
 void ta_lock_destroy(talock_t *mutex) {
+    ta_sem_destroy(mutex -> sem);
 }
 
 void ta_lock(talock_t *mutex) {
+    ta_sem_wait(mutex -> sem);
 }
 
 void ta_unlock(talock_t *mutex) {
+    ta_sem_post(mutex -> sem);
 }
 
 

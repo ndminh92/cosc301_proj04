@@ -11,11 +11,12 @@
    *************************** */
 
 typedef struct {
-
+    int value;
+    ucontext_t *head;
 } tasem_t;
 
 typedef struct {
-
+    tasem_t sem;
 } talock_t;
 
 typedef struct {
