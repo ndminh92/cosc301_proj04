@@ -17,11 +17,12 @@ struct t_list {
     int blocked;
     t_list_t *prev;
     t_list_t *next;
+    talock_t *held_lock;
 };
 
 typedef struct {
     int value;
-    ucontext_t *head;
+    t_list_t *head;
 } tasem_t;
 
 typedef struct {
@@ -29,7 +30,8 @@ typedef struct {
 } talock_t;
 
 typedef struct {
-
+    t_list_t *head;
+    t_list_t *tail;
 } tacond_t;
 
  

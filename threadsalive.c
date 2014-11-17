@@ -91,7 +91,7 @@ void ta_libinit(void) {
 void ta_create(void (*func)(void *), void *arg) {
     t_list_t *newuc = malloc(sizeof(t_list_t));
     unsigned char *newstack = (unsigned char *)malloc(STACKSIZE);
-    
+    newuc -> held_lock = NULL; // For stage 3 functionality.
 
     // Initialize context
     getcontext(&newuc->context);
@@ -197,14 +197,84 @@ void ta_unlock(talock_t *mutex) {
    ***************************** */
 
 void ta_cond_init(tacond_t *cond) {
+    cond -> head = NULL;
+    cond -> tail = NULL;
 }
 
 void ta_cond_destroy(tacond_t *cond) {
+    // Destroy cond, and all ucontext that waited on it
+    t_list_t *temp = cond -> head;
+    while (temp != NULL) {
+        temp = cond -> head -> next;
+        free(cond -> head -> context.uc_stack.ss_sp);
+        free(cond -> head);
+        cond -> head = temp;
+    }
+    cond -> tail = NULL;
 }
 
 void ta_wait(talock_t *mutex, tacond_t *cond) {
+    t_list_t *thisuc = head;
+    blocked_thread += 1; // blocked_thread count
+    // Unlock mutex. Note down the lock
+    ta_unlock(mutex);
+    thisuc -> held_lock = mutex;
+
+    // Move this ucontext into a waiting queue
+    if (head == tail) { // No other thread in ready queue
+        head = NULL; // Remove context from ready queue
+        tail = NULL; // which happens to have nothing left in it.
+        ta_cond_add(cond, thisuc);
+        swapcontext(thisuc -> context, &mainthread); // swap back to main
+        
+    } else { // Move thread to end of queue
+        head = thisuc -> next;
+        
+        ta_cond_add(cond, thisuc); // Add thread to waiting queue
+        swapcontext(thisuc -> context, head -> context); // Swap to next context
+    }
+
+    
 }
 
 void ta_signal(tacond_t *cond) {
+    // Get a thead from cond waiting queue to put back on ready queue
+    t_list_t *temp = ta_cond_remove(cond);
+    if (temp == NULL) { // Nothing waiting
+        return;
+    } else {
+        talock_t *lock = temp -> held_lock; // Remember to acquire lock again
+        temp -> held_lock = NULL;
+
+        // WAITING FOR LOCK FUNCTIONALITY
+        // Add temp to the waiting queue for *lock
+    }
 }
 
+// Add a thead context to the waiting queue of the conditional variable
+static void ta_cond_add(tacond_t *cond, t_list_t *uc) {
+    if (cond -> head == NULL) { // No waiting thread
+        cond -> head = uc;
+        cond -> tail = uc;
+    } else {
+        cond -> tail -> next = uc;
+        cond -> tail = uc;
+    }
+}
+
+// Take the first thread context from the waiting queue of the conditional variable
+// Return NULL if no thread is waiting
+static t_list_t *ta_cond_remove(tacond_t *cond) {
+    if (cond -> head == NULL) { // No thread waiting
+        return NULL;
+    } else if (cond -> head == cond -> tail) { // Only one thread waiting
+        t_list_t *temp = cond -> head;
+        cond -> head = NULL;
+        cond -> tail = NULL;
+        return temp;
+    } else { // More than one waiting. Get 1st one
+        t_list_t *temp = cond -> head;
+        cond -> head = temp -> next;
+        return temp;
+    }
+}
