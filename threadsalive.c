@@ -17,7 +17,7 @@
 
 #include "threadsalive.h"
 
-#define __DEBUG__
+//#define __DEBUG__
 
 
 /* ********************** *
@@ -46,6 +46,11 @@ static void context_init(t_list_t *newuc, unsigned char *newstack) {
 
 /* insert a context to a queue */
 static void t_list_insert(t_list_t *context, t_list_t **q_head) {
+    if (context == NULL) {
+        printf("Not designed to insert null\n");
+        return;
+    }
+    context -> next = NULL;
     if (*q_head == NULL) { // Queue is empty
         *q_head = context;
     } else {
@@ -90,6 +95,8 @@ static t_list_t* t_list_tail(t_list_t *q_head) {
 static bool t_list_contains(t_list_t *context, t_list_t *q_head) {
     if (q_head == NULL) { // Queue is empty
         return false;
+    } else if (q_head == context) {
+        return true;
     } else {
         while (q_head -> next != NULL && q_head -> next != context) {
             q_head = q_head -> next;
@@ -131,7 +138,7 @@ void ta_create(void (*func)(void *), void *arg) {
     makecontext(&newuc -> context, (void (*)(void))func, 1, arg);
     
     t_list_main_insert(newuc);
-    printf("Finished adding a thread context\n");
+    //printf("Finished adding a thread context\n");
     return;
 }
 
@@ -195,13 +202,68 @@ void ta_sem_init(tasem_t *sem, int value) {
 
 void ta_sem_destroy(tasem_t *sem) {
     /* Hello. My name is Inigo Montoya. You killed my father. Prepare to die. */
+
+    while (sem -> head != NULL) {
+        t_list_t *temp = sem -> head;
+        sem -> head = sem -> head -> next;
+        free((temp->context).uc_stack.ss_sp);
+        free(temp);
+    }
 }
 
 void ta_sem_post(tasem_t *sem) {
+#ifdef __DEBUG__
+    printf("post called by thread %p on semaphore %p\n", &(head->context), sem);
+    printf("semaphore %p posting from %d\n", sem, sem->value);
+#endif
     (sem -> value)++;
+#ifdef __DEBUG__
+    printf("semaphore %p now %d\n", sem, sem->value);
+#endif
+    if (sem -> head != NULL) {
+        blocked_thread--;
+#ifdef __DEBUG__
+    printf("blocked threads: %d\n", blocked_thread);
+#endif
+
+        t_list_t *temp = sem->head;
+        temp = t_list_extract(temp, &(sem->head));
+        t_list_insert(temp, &head);
+    }
 }
 
 void ta_sem_wait(tasem_t *sem) {
+#ifdef __DEBUG__
+    printf("wait called by thread %p on semaphore %p\n", &(head->context), sem);
+#endif
+
+    if (sem -> value > 0) {
+#ifdef __DEBUG__
+        printf("semaphore %p waiting from %d\n", sem, sem->value);
+#endif
+        (sem -> value)--;
+#ifdef __DEBUG__
+        printf("semaphore %p now %d\n", sem, sem->value);
+#endif
+    } else {
+        blocked_thread++;
+#ifdef __DEBUG__
+        printf("blocked threads: %d\n", blocked_thread);
+#endif
+
+        t_list_t *temp = head;
+        temp = t_list_extract(temp, &head);
+        t_list_insert(temp, &(sem -> head));
+        
+        if (head == NULL) {
+            swapcontext(&(temp -> context), &main_thread);
+        } else {
+#ifdef __DEBUG__
+            printf("swapping %p with %p\n", &(temp -> context), &(head -> context));
+#endif
+            swapcontext(&(temp -> context), &(head -> context));
+        }
+    }
 }
 
 void ta_lock_init(talock_t *mutex) {
