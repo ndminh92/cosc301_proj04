@@ -212,20 +212,9 @@ void ta_sem_destroy(tasem_t *sem) {
 }
 
 void ta_sem_post(tasem_t *sem) {
-#ifdef __DEBUG__
-    printf("post called by thread %p on semaphore %p\n", &(head->context), sem);
-    printf("semaphore %p posting from %d\n", sem, sem->value);
-#endif
     (sem -> value)++;
-#ifdef __DEBUG__
-    printf("semaphore %p now %d\n", sem, sem->value);
-#endif
     if (sem -> head != NULL) {
         blocked_thread--;
-#ifdef __DEBUG__
-    printf("blocked threads: %d\n", blocked_thread);
-#endif
-
         t_list_t *temp = sem->head;
         temp = t_list_extract(temp, &(sem->head));
         t_list_insert(temp, &head);
@@ -233,24 +222,10 @@ void ta_sem_post(tasem_t *sem) {
 }
 
 void ta_sem_wait(tasem_t *sem) {
-#ifdef __DEBUG__
-    printf("wait called by thread %p on semaphore %p\n", &(head->context), sem);
-#endif
-
     if (sem -> value > 0) {
-#ifdef __DEBUG__
-        printf("semaphore %p waiting from %d\n", sem, sem->value);
-#endif
         (sem -> value)--;
-#ifdef __DEBUG__
-        printf("semaphore %p now %d\n", sem, sem->value);
-#endif
     } else {
         blocked_thread++;
-#ifdef __DEBUG__
-        printf("blocked threads: %d\n", blocked_thread);
-#endif
-
         t_list_t *temp = head;
         temp = t_list_extract(temp, &head);
         t_list_insert(temp, &(sem -> head));
@@ -258,9 +233,6 @@ void ta_sem_wait(tasem_t *sem) {
         if (head == NULL) {
             swapcontext(&(temp -> context), &main_thread);
         } else {
-#ifdef __DEBUG__
-            printf("swapping %p with %p\n", &(temp -> context), &(head -> context));
-#endif
             swapcontext(&(temp -> context), &(head -> context));
         }
     }
